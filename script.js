@@ -1,9 +1,5 @@
 //6.4x10^4m = 1px
 
-// g = Gm/(rx*rx+ry*ry)
-//
-//
-//
 
 const earth = document.getElementById('ah');
 const moon = document.getElementById('tah');
@@ -15,7 +11,7 @@ const ctx = canvas.getContext("2d");
 
 
 
-planets = [[Math.random()*window.innerWidth, Math.random()*window.innerHeight, 100, 5.97e24],[Math.random()*window.innerWidth, Math.random()*window.innerHeight, 27, 7.35e22]];
+planets = [[0.4*window.innerWidth, 0.3*window.innerHeight, 100, 5.97e24],[0.7*window.innerWidth, 0.6*window.innerHeight, 27, 7.35e22]];
 console.log(planets);
 
 earth.style.top = (planets[0][1]-100)+'px';
@@ -85,7 +81,7 @@ function trace(the_x, the_y){
 	let start = 'rgb(';
 	let com = ','
 	let end = ')';
-	let red = (255*g/9.81).toString();
+	let red = (255*Math.sqrt(g/9.81)).toString();
 	let green = (0).toString();
 	let blue = (0).toString();
 	ctx.fillStyle = start.concat(red).concat(com).concat(green).concat(com).concat(blue).concat(end);
