@@ -1,8 +1,8 @@
 //6.4x10^4m = 1px
 
 
-const earth = document.getElementById('ah');
-const moon = document.getElementById('tah');
+const earth = document.getElementById('earth');
+const moon = document.getElementById('moon');
 
 const canvas = document.getElementById('2d-world');
 canvas.width = window.innerWidth;
