@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <title>Bob</title>
+</head>
+<body>
+	<canvas id="bg"></canvas>
+    
+	
+    <script src="script.js"></script>
+
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+
+    <script type="importmap">
+    {
+        "imports": {
+        "three": "https://unpkg.com/three@v0.152.2/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@v0.152.2/examples/jsm/"
+        }
+    }
+    </script>
+
+	<script type="module">
+		//1e6m = 1 unit
+	
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+		import Stats from 'three/addons/libs/stats.module.js';
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+
+        const renderer = new THREE.WebGLRenderer({
+            canvas: document.querySelector('#bg'),
+			antialias: true,
+        });
+
+        renderer.setSize( window.innerWidth, window.innerHeight );
+
+        camera.position.set(2.320571470603363,293.7518320490052,-474.2164745192244);
+
+        renderer.render( scene, camera );
+
+        //add objects
+		var texture = new THREE.TextureLoader().load( 'https://cors-anywhere.herokuapp.com/https://geology.com/world/world-map.gif' );
+		texture.colorSpace = THREE.SRGBColorSpace;
+		var material = new THREE.MeshBasicMaterial( { map: texture } );
+		
+		function planet(radius, colour) {
+			texture = new THREE.TextureLoader().load( 'https://cors-anywhere.herokuapp.com/https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg' );
+			texture.colorSpace = THREE.SRGBColorSpace;
+			material = new THREE.MeshBasicMaterial( { map: texture } );
+			return new THREE.Mesh(new THREE.SphereGeometry( radius, 32, 16 ),material);
+		}
+		function star(radius, colour) {
+			texture = new THREE.TextureLoader().load( 'https://cors-anywhere.herokuapp.com/https://geology.com/world/world-map.gif' );
+			texture.colorSpace = THREE.SRGBColorSpace;
+			material = new THREE.MeshBasicMaterial( { map: texture } );
+			return new THREE.Mesh(new THREE.SphereGeometry( radius, 32, 16 ),material);
+		}
+		
+		const earth = star(6.37,0);
+        earth.position.set(0,0,0);
+        scene.add( earth );
+		
+		const moon = planet(1.737,0);
+        moon.position.set(384.4,0,0);
+        scene.add( moon );
+		console.log(moon)
+
+        //add light
+        const pointLight = new THREE.PointLight(0xffffff);
+        const anbientLight = new THREE.AmbientLight(0x333333);
+        pointLight.position.set(0,0,0);
+
+        scene.add(pointLight, anbientLight);
+
+        // Helpers
+
+        const lightHelper = new THREE.PointLightHelper(pointLight)
+        const gridHelper = new THREE.GridHelper(1000, 50);
+        //scene.add(lightHelper, gridHelper)
+
+        //controls
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+
+        //stars randomly
+
+        function addstar() {
+            const geometry = new THREE.SphereGeometry(0.25, 20, 20)
+            const material = new THREE.MeshStandardMaterial( { color: 0xffffff } );
+            const star = new THREE.Mesh( geometry, material );
+
+            const [x, y, z] = Array(3).fill().map(() => (THREE.MathUtils.randFloatSpread( 1000 )));
+
+            star.position.set(x, y, z);
+            scene.add(star);
+        }
+
+        Array(4).fill().forEach(addstar);
+
+		var valovity = [0,0.1,0];
+		const pos_earth = [0,0,0];
+		let mass = 6e24;
+        //move
+        function animate() {
+            requestAnimationFrame( animate );
+
+            controls.update();
+			
+			let vector = [pos_earth[0]-moon.position.x,pos_earth[1]-moon.position.y,pos_earth[2]-moon.position.z];
+			let magnitude = Math.sqrt(vector[0]*vector[0]+vector[1]*vector[1]+vector[2]*vector[2]) *1e6;//last bit for scale
+			let unit_vec = [vector[0]/magnitude,vector[1]/magnitude,vector[2]/magnitude];
+			
+			let force = 6.67e-11*mass/(magnitude*magnitude);
+			
+			let acceleration = [unit_vec[0]*force,unit_vec[1]*force,unit_vec[2]*force];
+			
+			valovity[0] += acceleration[0]*1e5;//ignore the last bit 
+			valovity[1] += acceleration[1]*1e5;//ignore the last bit 
+			valovity[2] += acceleration[2]*1e5;//ignore the last bit 
+			
+			moon.position.set(moon.position.x+valovity[0],moon.position.y+valovity[1],moon.position.z+valovity[2]);
+
+            renderer.render( scene, camera );
+        }
+
+        animate()
+    </script>
+</body>
+</html>
