@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - buffergeometry - indexed</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+        <style>
+            canvas {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+            }
+            button {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+            }
+        </style>
+	</head>
+	<body oncontextmenu="return false;">
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://unpkg.com/three@v0.152.2/build/three.module.js",
+					"three/addons/": "https://unpkg.com/three@v0.152.2/examples/jsm/"
+				}
+			}
+		</script>
+
+        <canvas id="canvas" style="background-color: #050505;"></canvas>
+        <button id="button" onclick="init()">Generate</button>
+
+		<script type="module">
+
+			import * as THREE from 'three';
+            import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat@0.11.2';
+			import Stats from 'three/addons/libs/stats.module.js';
+			import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+            class RapierDebugRenderer {
+                mesh
+                world
+                enabled = false//lag alert
+
+                constructor(scene, world) {
+                    this.world = world
+                    this.mesh = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, vertexColors: true }))
+                    this.mesh.frustumCulled = false
+                    scene.add(this.mesh)
+                }
+
+                update() {
+                    if (this.enabled) {
+                        const { vertices, colors } = world.debugRender()
+                        this.mesh.geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
+                        this.mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4))
+                        this.mesh.visible = true
+                    } else {
+                        this.mesh.visible = false
+                    }
+                }
+            }
+
+            await RAPIER.init() // This line is only needed if using the compat version
+            const gravity = new RAPIER.Vector3(0.0, -9.81, 0.0)
+            const world = new RAPIER.World(gravity)
+            const clock = new THREE.Clock()
+
+			let camera, scene, renderer, stats, controls, gui, rapierDebugRenderer, sphereMesh, sphereBody;
+
+			let gridHelper;
+			
+			let mesh, ball, plane;
+
+			let planets = [];
+			let settings = {sensitivity: 1e12 };
+			
+            function init(){
+                document.getElementById('canvas').style.display = 'none';
+                document.getElementById('button').style.display = 'none';
+
+                camera = new THREE.PerspectiveCamera( 27, window.innerWidth / window.innerHeight, 1, 5000 );
+                camera.position.set(0, 1500, 1500);
+
+                renderer = new THREE.WebGLRenderer( { antialias: true } );
+                renderer.setPixelRatio( window.devicePixelRatio );
+                renderer.setSize( window.innerWidth, window.innerHeight );
+                document.body.appendChild( renderer.domElement );
+				
+				renderer.localClippingEnabled = true;
+
+                stats = new Stats();
+                document.body.appendChild( stats.dom );
+				
+				const topPlane = new THREE.Plane( new THREE.Vector3( 0, - 1, 0 ), 200 );
+				const bottomPlane = new THREE.Plane( new THREE.Vector3( 0, 1, 0 ), 200 );
+
+                var material = new THREE.MeshStandardMaterial( {
+                    side: THREE.DoubleSide,
+					// ***** Clipping setup (material): *****
+					clippingPlanes: [ topPlane, bottomPlane ],
+					clipShadows: true,
+					
+                    vertexColors: true,
+                    wireframe: false,
+                } );
+
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color( 0x050505 );
+                rapierDebugRenderer = new RapierDebugRenderer(scene, world)
+                
+                //
+
+                const geometry = new THREE.BufferGeometry();
+
+                const indices = [];
+
+                const vertices = [];
+                const normals = [];
+                const colors = [];
+
+                const size = 1000;
+                const segments = 311;
+
+                const halfSize = size / 2;
+                const segmentSize = size / segments;
+
+                const _color = new THREE.Color();
+
+                // generate vertices, normals and color data for a simple grid geometry
+
+                for ( let i = 0; i <= segments; i ++ ) {
+
+                    const z = ( i * segmentSize ) - halfSize;
+
+                    for ( let j = 0; j <= segments; j ++ ) {
+
+                        const x = ( j * segmentSize ) - halfSize;
+                        
+                        let holder = trace(x,z), r, g, b;
+                        if(!isNaN(holder)){
+                            vertices.push( x, settings.sensitivity*holder, z );
+							r=b=1;
+							g = 1-Math.abs(settings.sensitivity*holder/100)
+							if(holder>0){b=Math.max(1-settings.sensitivity*holder/200,0)};
+							if(holder<0){r=Math.max(1+settings.sensitivity*holder/200,0)};
+                        }else{
+							vertices.push( x, 0, z );
+							r=b=g=0;
+                        }
+                        normals.push( 0, 1, 0 );
+
+                        _color.setRGB( r, g, b, THREE.SRGBColorSpace );
+
+                        colors.push( _color.r, _color.g, _color.b );
+
+                    }
+                }
+
+                // generate indices (data for element array buffer)
+
+                for ( let i = 0; i < segments; i ++ ) {
+
+                    for ( let j = 0; j < segments; j ++ ) {
+
+                        const a = i * ( segments + 1 ) + ( j + 1 );
+                        const b = i * ( segments + 1 ) + j;
+                        const c = ( i + 1 ) * ( segments + 1 ) + j;
+                        const d = ( i + 1 ) * ( segments + 1 ) + ( j + 1 );
+
+                        // generate two faces (triangles) per iteration
+
+                        indices.push( a, b, d ); // face one
+                        indices.push( b, c, d ); // face two
+
+                    }
+
+                }
+
+                geometry.setIndex( indices );
+                geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+                geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute( normals, 3 ) );
+                geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
+
+                
+                mesh = new THREE.Mesh( geometry, material );
+                scene.add( mesh );
+				
+				plane = new THREE.Mesh( new THREE.PlaneGeometry( 1000, 1000 ), new THREE.MeshBasicMaterial( {color: 0x660066, side: THREE.DoubleSide} ) );
+				scene.add( plane );
+				plane.rotation.x = Math.PI/2;
+				plane.visible = false;
+				
+                let heights = [];
+                for(let i=0; i<=500;i++){
+                    for(let j=0; j<=500;j++){
+                        heights.push(settings.sensitivity*trace(i*2-500,j*2-500));
+                    }
+                }
+                const landBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0))
+                const landShape = RAPIER.ColliderDesc.heightfield(500, 500, heights, new RAPIER.Vector3(1000, 1, 1000));
+                const landCol = world.createCollider(landShape, landBody);
+
+                sphereMesh = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), new THREE.MeshPhongMaterial( { color: '#cc4400' } ))
+                scene.add(sphereMesh)
+                sphereBody = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0, settings.sensitivity*trace(0,0)+20, 0).setCanSleep(false))
+                const sphereShape = RAPIER.ColliderDesc.ball(10).setMass(1).setRestitution(0.5)
+                world.createCollider(sphereShape, sphereBody)
+
+                const light = new THREE.AmbientLight( 0xcccccc );
+                scene.add( light );
+
+                gui = new GUI();
+                gui.add( material, 'wireframe' );
+                gui.add( plane, 'visible' );
+				gui.add( plane.position, 'y', -100, 100);
+                
+                controls = new OrbitControls(camera, renderer.domElement);
+
+                window.addEventListener( 'resize', onWindowResize );
+
+                animate();
+            }
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+			
+			function trace(the_x, the_y){	
+				var V = 0;
+				for(let i=0;i<planets.length;i++) {
+					let mass = planets[i][3];
+					let r = Math.sqrt((the_x-planets[i][0])*(the_x-planets[i][0]) + (the_y-planets[i][1])*(the_y-planets[i][1]));
+					
+					V+= 8987551788 * mass / r;
+				}
+				return V;
+			}
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+						
+				render();
+				stats.update();
+
+			}
+
+			function render() {
+                world.timestep = clock.getDelta()*5
+                world.step()
+                sphereMesh.position.copy(sphereBody.translation())
+                sphereMesh.quaternion.copy(sphereBody.rotation())
+				controls.update();
+                rapierDebugRenderer.update()
+				renderer.render( scene, camera );
+
+			}
+
+            function proton(ctx, x, y){
+                ctx.fillStyle = 'red';
+                ctx.beginPath();
+                ctx.arc(x, y, 10, 0, 2 * Math.PI);
+                ctx.fill();
+                planets.push([1000*x/window.innerWidth-500, 1000*(y/window.innerHeight-0.5)*window.innerHeight/window.innerWidth, 'would be radius', 1.6e-19]);
+            }
+
+            function electron(ctx, x, y){
+                ctx.fillStyle = 'blue';
+                ctx.beginPath();
+                ctx.arc(x, y, 10, 0, 2 * Math.PI);
+                ctx.fill();
+                planets.push([1000*x/window.innerWidth-500, 1000*(y/window.innerHeight-0.5)*window.innerHeight/window.innerWidth, 'would be radius', -1.6e-19]);
+            }
+
+            document.getElementById("button").onclick = init;
+
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.width = window.innerWidth
+            canvas.height = window.innerHeight
+            ctx.fillStyle = 'aqua';
+            ctx.beginPath();
+            ctx.arc(canvas.width/2, canvas.height/2, 5, 0, 2 * Math.PI);
+            ctx.fill();
+
+            addEventListener("mousedown", (event) => {
+                if(mesh == undefined && (event.clientX>=85 || event.clientY>=35)){
+                    if(event.button == 2){
+                        electron(ctx,event.clientX,event.clientY);
+                    }else if(event.button == 0){
+                        proton(ctx,event.clientX,event.clientY);
+                    }
+                }
+            });
+		</script>
+
+	</body>
+</html>
